@@ -3,7 +3,49 @@ import numpy as np
 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
-#quita frames por segundo que y porque justificar
+
+def overlay_region(base, source, center, w, h, alpha=0.7,
+                   mode="ellipse", ellipse_scales=(0.45, 0.6)):
+    h_img, w_img = base.shape[:2]
+    cx, cy = int(center[0]), int(center[1])
+
+    x1 = max(cx - w // 2, 0)
+    y1 = max(cy - h // 2, 0)
+    x2 = min(cx + w // 2, w_img - 1)
+    y2 = min(cy + h // 2, h_img - 1)
+
+    if x2 <= x1 or y2 <= y1:
+        return base
+
+    patch_base = base[y1:y2, x1:x2]
+    patch_src = source[y1:y2, x1:x2]
+
+    if mode == "rect":
+        blended = cv2.addWeighted(patch_src, alpha, patch_base, 1 - alpha, 0)
+
+    elif mode == "ellipse":
+        ph, pw = patch_base.shape[:2]
+
+        mask = np.zeros((ph, pw), dtype=np.uint8)
+        center_ellipse = (pw // 2, ph // 2)
+        sx, sy = ellipse_scales  # proporción del ancho/alto
+        axes = (int(pw * sx), int(ph * sy))  # radios en x,y
+
+        cv2.ellipse(mask, center_ellipse, axes, 0, 0, 360, 255, -1)
+        mask = cv2.GaussianBlur(mask, (0, 0), sigmaX=3, sigmaY=3)
+
+        mask_f = (mask.astype(np.float32) / 255.0)[:, :, None]
+        blended = patch_src * (alpha * mask_f) + patch_base * (1.0 - alpha * mask_f)
+        blended = blended.astype(np.uint8)
+
+    else:
+        # fallback por si acaso
+        blended = patch_base
+
+    base[y1:y2, x1:x2] = blended
+    return base
+
+
 
 def detectar_landmarks_multiple(frame, max_faces=2):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -110,6 +152,28 @@ def aplicar_swap_dos_caras(frame, templates):
     out = frame.copy()
     out = clonar_cara(out, img_left, mask_left, src_pts_left, dst_pts_right)
     out = clonar_cara(out, img_right, mask_right, src_pts_right, dst_pts_left)
+
+    # OJOS Y BOCA REALES SOBRE LA CARA SWAPPEADA (PERSONA 1)
+    face_width_left = np.linalg.norm(dst_pts_left[1] - dst_pts_left[0])
+    eye_w_l = int(face_width_left * 0.5)
+    eye_h_l = int(face_width_left * 0.3)
+    mouth_w_l = int(face_width_left * 0.8)
+    mouth_h_l = int(face_width_left * 0.45)
+
+    out = overlay_region(out, frame, dst_pts_left[0], eye_w_l, eye_h_l, alpha=0.8, mode="ellipse")
+    out = overlay_region(out, frame, dst_pts_left[1], eye_w_l, eye_h_l, alpha=0.8, mode="ellipse")
+    out = overlay_region(out, frame, dst_pts_left[2], mouth_w_l, mouth_h_l, alpha=0.95, mode="ellipse")
+
+    # OJOS Y BOCA REALES SOBRE LA CARA SWAPPEADA (PERSONA 2)
+    face_width_right = np.linalg.norm(dst_pts_right[1] - dst_pts_right[0])
+    eye_w_r = int(face_width_right * 0.5)
+    eye_h_r = int(face_width_right * 0.3)
+    mouth_w_r = int(face_width_right * 0.8)
+    mouth_h_r = int(face_width_right * 0.45)
+
+    out = overlay_region(out, frame, dst_pts_right[0], eye_w_r, eye_h_r, alpha=0.8, mode="ellipse")
+    out = overlay_region(out, frame, dst_pts_right[1], eye_w_r, eye_h_r, alpha=0.8, mode="ellipse")
+    out = overlay_region(out, frame, dst_pts_right[2], mouth_w_r, mouth_h_r, alpha=0.95, mode="ellipse")
 
     return out
 
