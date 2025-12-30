@@ -20,6 +20,28 @@ def cargar_foto(photo_paths, idx):
     return ruta, photo_img, photo_mask, src_pts, src_face_rect
 
 
+def make_thumb(path, size=(120, 120)):
+    img = cv2.imread(path)
+    if img is None:
+        return None
+    return cv2.resize(img, size)
+
+
+def actualizar_fotos_y_thumbs(photo_paths, photo_idx, thumb_size=(120, 120)):
+    ruta_actual, photo_img, photo_mask, src_pts, src_face_rect = cargar_foto(photo_paths, photo_idx)
+
+    n = len(photo_paths)
+    prev_idx = (photo_idx - 1) % n
+    next_idx = (photo_idx + 1) % n
+
+    thumb_actual = cv2.resize(photo_img, thumb_size)
+    thumb_prev = make_thumb(photo_paths[prev_idx], thumb_size)
+    thumb_next = make_thumb(photo_paths[next_idx], thumb_size)
+
+    return (ruta_actual, photo_img, photo_mask, src_pts, src_face_rect,
+            thumb_prev, thumb_actual, thumb_next)
+
+
 def modo_fotos(camera_index=0, width=1280, height=720, photo_folder="fotos"):
     cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
     if not cap.isOpened():
@@ -36,8 +58,11 @@ def modo_fotos(camera_index=0, width=1280, height=720, photo_folder="fotos"):
         return
 
     photo_idx = 0
-    ruta_actual, photo_img, photo_mask, src_pts, src_face_rect = cargar_foto(photo_paths, photo_idx)
+    (ruta_actual, photo_img, photo_mask, src_pts, src_face_rect,
+     thumb_prev, thumb_actual, thumb_next) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
+
     prev_dst_pts = None
+    total = len(photo_paths)
 
     print("Modo fotos:")
     print("  n = siguiente foto")
@@ -56,16 +81,26 @@ def modo_fotos(camera_index=0, width=1280, height=720, photo_folder="fotos"):
                 prev_dst_pts=prev_dst_pts, alpha_smooth=0.6, usar_orb=False
             )
 
-            # Thumbnail de la foto actual en la esquina
-            thumb_h = 160
-            thumb_w = 160
-            thumb = cv2.resize(photo_img, (thumb_w, thumb_h))
-            frame_swapped[10:10 + thumb_h, 10:10 + thumb_w] = thumb
+            h, w = frame_swapped.shape[:2]
+            th, tw = thumb_actual.shape[:2]
+            margin = 10
+
+            # posiciones de las tres miniaturas (prev, actual, next)
+            x_prev = margin
+            x_actual = x_prev + tw + margin
+            x_next = x_actual + tw + margin
+            y_top = margin
+
+            if thumb_prev is not None:
+                frame_swapped[y_top:y_top + th, x_prev:x_prev + tw] = thumb_prev
+            frame_swapped[y_top:y_top + th, x_actual:x_actual + tw] = thumb_actual
+            if thumb_next is not None:
+                frame_swapped[y_top:y_top + th, x_next:x_next + tw] = thumb_next
 
             nombre = os.path.basename(ruta_actual)
             cv2.putText(frame_swapped,
-                        f"FOTO: {nombre}",
-                        (10, 10 + thumb_h + 25),
+                        f"{photo_idx + 1} / {total}  |  {nombre}",
+                        (margin, y_top + th + 25),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.6,
                         (0, 255, 255),
@@ -73,7 +108,7 @@ def modo_fotos(camera_index=0, width=1280, height=720, photo_folder="fotos"):
 
             cv2.putText(frame_swapped,
                         "n: siguiente | p: anterior | r: recargar | q: salir",
-                        (10, frame_swapped.shape[0] - 20),
+                        (margin, h - 20),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.6,
                         (255, 255, 255),
@@ -87,22 +122,26 @@ def modo_fotos(camera_index=0, width=1280, height=720, photo_folder="fotos"):
                 break
 
             if key == ord('n'):
-                photo_idx = (photo_idx + 1) % len(photo_paths)
-                ruta_actual, photo_img, photo_mask, src_pts, src_face_rect = cargar_foto(photo_paths, photo_idx)
+                photo_idx = (photo_idx + 1) % total
+                (ruta_actual, photo_img, photo_mask, src_pts, src_face_rect,
+                 thumb_prev, thumb_actual, thumb_next) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
                 prev_dst_pts = None
 
             if key == ord('p'):
-                photo_idx = (photo_idx - 1) % len(photo_paths)
-                ruta_actual, photo_img, photo_mask, src_pts, src_face_rect = cargar_foto(photo_paths, photo_idx)
+                photo_idx = (photo_idx - 1) % total
+                (ruta_actual, photo_img, photo_mask, src_pts, src_face_rect,
+                 thumb_prev, thumb_actual, thumb_next) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
                 prev_dst_pts = None
 
             if key == ord('r'):
                 photo_paths = load_photo_paths(photo_folder)
+                total = len(photo_paths)
                 if photo_paths:
                     photo_idx = 0
-                    ruta_actual, photo_img, photo_mask, src_pts, src_face_rect = cargar_foto(photo_paths, photo_idx)
+                    (ruta_actual, photo_img, photo_mask, src_pts, src_face_rect,
+                     thumb_prev, thumb_actual, thumb_next) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
                     prev_dst_pts = None
-                    print("Carpeta recargada, fotos encontradas:", len(photo_paths))
+                    print("Carpeta recargada, fotos encontradas:", total)
                 else:
                     print("Despues de recargar no hay fotos en la carpeta.")
 
