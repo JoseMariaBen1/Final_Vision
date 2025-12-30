@@ -3,10 +3,11 @@ import os
 
 from security import (
     barrera_seguridad,
-    detectar_patron,
+    clasificar_contorno,
     PATTERN_NONE,
     PATTERN_CIRCLE,
     PATTERN_TRIANGLE,
+    PATTERN_SQUARE,
 )
 from modo_fotos import load_photo_paths, actualizar_fotos_y_thumbs
 from swap_caras_mejorado import aplicar_swap
@@ -14,6 +15,67 @@ from swap_personas_mejorado import capturar_plantillas_dos_caras, aplicar_swap_d
 
 MODE_FOTO = 0
 MODE_TWO = 1
+
+
+def detectar_patron_lateral(roi):
+    """
+    Versión específica de detección de figura para el ROI lateral.
+    Usa la misma lógica de la práctica, pero prioriza:
+    CIRCULO > TRIANGULO > CUADRADO.
+    """
+    gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+
+    _, thresh = cv2.threshold(
+        blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU
+    )
+
+    h, w = thresh.shape
+    contours, _ = cv2.findContours(
+        thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    if not contours:
+        return PATTERN_NONE
+
+    roi_h, roi_w = h, w
+    min_area = 0.08 * roi_w * roi_h  # igual que en security
+
+    best_pattern = PATTERN_NONE
+    best_score = -1
+
+    for c in contours:
+        area = cv2.contourArea(c)
+        if area < min_area:
+            continue
+
+        x, y, cw, ch = cv2.boundingRect(c)
+        ratio_minmax = min(cw, ch) / float(max(cw, ch))
+        if ratio_minmax < 0.35:
+            continue
+
+        cx = x + cw / 2.0
+        cy = y + ch / 2.0
+        if not (roi_w * 0.25 < cx < roi_w * 0.75 and roi_h * 0.25 < cy < roi_h * 0.75):
+            continue
+
+        # Clasificamos contorno con la lógica de la práctica
+        p = clasificar_contorno(c)
+        if p == PATTERN_NONE:
+            continue
+
+        # Priorización: círculo > triángulo > cuadrado
+        score = {
+            PATTERN_CIRCLE: 3,
+            PATTERN_TRIANGLE: 2,
+            PATTERN_SQUARE: 1
+        }.get(p, 0)
+
+        if score > best_score:
+            best_score = score
+            best_pattern = p
+
+    return best_pattern
 
 
 def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
@@ -40,8 +102,16 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
     prev_dst_pts = None
 
     if tiene_fotos:
-        (ruta_actual, photo_img, photo_mask, src_pts, src_face_rect,
-         thumb_prev, thumb_actual, thumb_next) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
+        (
+            ruta_actual,
+            photo_img,
+            photo_mask,
+            src_pts,
+            src_face_rect,
+            thumb_prev,
+            thumb_actual,
+            thumb_next,
+        ) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
         total_fotos = len(photo_paths)
     else:
         total_fotos = 0
@@ -50,7 +120,7 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
     # ----------------- Estado de la app -----------------
     mode = MODE_FOTO if tiene_fotos else MODE_TWO
     templates_two = None               # plantillas para modo 2 personas
-    prev_pattern = PATTERN_NONE        # para detectar flanco de CÍRCULO / TRIÁNGULO
+    prev_pattern = PATTERN_NONE        # para detectar flancos de CÍRCULO / TRIÁNGULO
 
     try:
         while True:
@@ -62,7 +132,7 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
             frame_show = frame.copy()
 
             # ========== ROI LATERAL DERECHO PEQUEÑO ==========
-            # Franja vertical en el lateral derecho (por ejemplo, cuarto central en altura)
+            # franja vertical en el lateral derecho, zona central en altura
             y1 = h // 4
             y2 = 3 * h // 4
             x1 = int(0.7 * w)
@@ -71,8 +141,7 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
             roi = frame[y1:y2, x1:x2]
 
             # Detectar figura SOLO en ese ROI
-            # (detecta sobre la imagen recortada; las coords que devuelve no las usamos)
-            patron, _, _ = detectar_patron(roi)
+            patron = detectar_patron_lateral(roi)
 
             # ---------- Lógica de cambio de modo y salida ----------
             # CÍRCULO (flanco) -> cambio de modo
@@ -95,7 +164,7 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
 
             # Teclas de emergencia
             key = cv2.waitKey(1) & 0xFF
-            if key == ord('q') or key == 27:
+            if key == ord("q") or key == 27:
                 print("Salida por teclado.")
                 break
 
@@ -103,8 +172,14 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
             if mode == MODE_FOTO and tiene_fotos:
                 # aplicar swap con la foto actual
                 frame_swapped, prev_dst_pts = aplicar_swap(
-                    frame, photo_img, photo_mask, src_pts, src_face_rect,
-                    prev_dst_pts=prev_dst_pts, alpha_smooth=0.6, usar_orb=False
+                    frame,
+                    photo_img,
+                    photo_mask,
+                    src_pts,
+                    src_face_rect,
+                    prev_dst_pts=prev_dst_pts,
+                    alpha_smooth=0.6,
+                    usar_orb=False,
                 )
 
                 h2, w2 = frame_swapped.shape[:2]
@@ -118,19 +193,27 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
 
                 # thumbnails (previa, actual, siguiente)
                 if thumb_prev is not None:
-                    frame_swapped[y_top:y_top + th, x_prev_thumb:x_prev_thumb + tw] = thumb_prev
-                frame_swapped[y_top:y_top + th, x_actual_thumb:x_actual_thumb + tw] = thumb_actual
+                    frame_swapped[
+                        y_top : y_top + th, x_prev_thumb : x_prev_thumb + tw
+                    ] = thumb_prev
+                frame_swapped[
+                    y_top : y_top + th, x_actual_thumb : x_actual_thumb + tw
+                ] = thumb_actual
                 if thumb_next is not None:
-                    frame_swapped[y_top:y_top + th, x_next_thumb:x_next_thumb + tw] = thumb_next
+                    frame_swapped[
+                        y_top : y_top + th, x_next_thumb : x_next_thumb + tw
+                    ] = thumb_next
 
                 nombre = os.path.basename(photo_paths[photo_idx])
-                cv2.putText(frame_swapped,
-                            f"{photo_idx + 1} / {total_fotos} | {nombre}",
-                            (margin, y_top + th + 25),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            0.6,
-                            (0, 255, 255),
-                            2)
+                cv2.putText(
+                    frame_swapped,
+                    f"{photo_idx + 1} / {total_fotos} | {nombre}",
+                    (margin, y_top + th + 25),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.6,
+                    (0, 255, 255),
+                    2,
+                )
 
                 cv2.putText(
                     frame_swapped,
@@ -145,25 +228,49 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
                 frame_show = frame_swapped
 
                 # navegación de fotos
-                if key == ord('n'):
+                if key == ord("n"):
                     photo_idx = (photo_idx + 1) % total_fotos
-                    (ruta_actual, photo_img, photo_mask, src_pts, src_face_rect,
-                     thumb_prev, thumb_actual, thumb_next) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
+                    (
+                        ruta_actual,
+                        photo_img,
+                        photo_mask,
+                        src_pts,
+                        src_face_rect,
+                        thumb_prev,
+                        thumb_actual,
+                        thumb_next,
+                    ) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
                     prev_dst_pts = None
 
-                if key == ord('p'):
+                if key == ord("p"):
                     photo_idx = (photo_idx - 1) % total_fotos
-                    (ruta_actual, photo_img, photo_mask, src_pts, src_face_rect,
-                     thumb_prev, thumb_actual, thumb_next) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
+                    (
+                        ruta_actual,
+                        photo_img,
+                        photo_mask,
+                        src_pts,
+                        src_face_rect,
+                        thumb_prev,
+                        thumb_actual,
+                        thumb_next,
+                    ) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
                     prev_dst_pts = None
 
-                if key == ord('r'):
+                if key == ord("r"):
                     photo_paths = load_photo_paths(photo_folder)
                     total_fotos = len(photo_paths)
                     if total_fotos > 0:
                         photo_idx = 0
-                        (ruta_actual, photo_img, photo_mask, src_pts, src_face_rect,
-                         thumb_prev, thumb_actual, thumb_next) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
+                        (
+                            ruta_actual,
+                            photo_img,
+                            photo_mask,
+                            src_pts,
+                            src_face_rect,
+                            thumb_prev,
+                            thumb_actual,
+                            thumb_next,
+                        ) = actualizar_fotos_y_thumbs(photo_paths, photo_idx)
                         prev_dst_pts = None
                         print("Carpeta recargada, fotos encontradas:", total_fotos)
                     else:
@@ -197,13 +304,12 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
                     )
                     frame_show = frame_out
 
-                if key == ord('f'):
+                if key == ord("f"):
                     templates_two = capturar_plantillas_dos_caras(frame)
                     if templates_two is not None:
                         print("Plantillas capturadas para las dos caras")
 
             # ========== CÍRCULO GUÍA EN EL LATERAL ==========
-            # Solo dibujamos un círculo (no el rectángulo entero) para indicar la zona de dibujo
             cx = (x1 + x2) // 2
             cy = (y1 + y2) // 2
             radius = min((x2 - x1), (y2 - y1)) // 2 - 5
@@ -226,7 +332,7 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
 
 
 if __name__ == "__main__":
-    # password: secuencia de figuras (por ejemplo: CUADRADO, CIRCULO, TRIANGULO, CUADRADO)
+    # password: secuencia de figuras (p.ej. CUADRADO, CIRCULO, TRIANGULO, CUADRADO)
     password = [3, 1, 2, 3]
     ok, pwd = barrera_seguridad(password=password)
     if ok:
