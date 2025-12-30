@@ -183,6 +183,6 @@ def main(camera_index=0, width=1280, height=720, photo_path="cara_foto.jpg"):
 
 
 if __name__ == "__main__":
-    main(photo_path="fernando_alonso_cara.webp")
+    main(photo_path="fotos/aitana_foto.webp")
 
     #main(photo_path="cara_mariano_rajoy.webp")
