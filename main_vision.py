@@ -12,6 +12,7 @@ from security import (
 from modo_fotos import load_photo_paths, actualizar_fotos_y_thumbs
 from swap_caras_mejorado import aplicar_swap
 from swap_personas_mejorado import capturar_plantillas_dos_caras, aplicar_swap_dos_caras
+from calibration import calibrar_camara, undistort_frame
 
 MODE_FOTO = 0
 MODE_TWO = 1
@@ -119,12 +120,15 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
     mode = MODE_FOTO if tiene_fotos else MODE_TWO
     templates_two = None
     prev_pattern = PATTERN_NONE
+    calibrar_camara("Calibration_images_Ray")  # o la carpeta que uses tú
+
 
     while True:
         ret, frame = cap.read()
         if not ret:
             break
-
+        
+        frame = undistort_frame(frame)
         h, w = frame.shape[:2]
         frame_show = frame.copy()
 
