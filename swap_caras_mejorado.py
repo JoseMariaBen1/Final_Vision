@@ -1,14 +1,12 @@
 import cv2
 import numpy as np
 
-# === Detectores Haar: algoritmo de Viola-Jones (tema de detección de objetos) ===
+# === Detectores Haar: algoritmo de Viola-Jones ===
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
 mouth_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_smile.xml")
 
-# === Detectores/descritores ORB para refinamiento opcional (práctica de keypoints) ===
-# Si en clase no habéis usado ORB tal cual, considera este bloque como
-# mejora extra propuesta por ChatGPT.
+# === ORB opcional (mejora extra) ===
 orb = cv2.ORB_create(500)
 bf_matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
@@ -33,7 +31,7 @@ def overlay_region(base, source, center, w, h, alpha=0.7, mode="rect"):
         base[y1:y2, x1:x2] = blended
         return base
 
-    # modo "ellipse": máscara suave elíptica para integraciones más naturales
+    # máscara elíptica suave
     ph, pw = patch_base.shape[:2]
     mask = np.zeros((ph, pw), dtype=np.uint8)
     center_ellipse = (pw // 2, ph // 2)
@@ -50,33 +48,25 @@ def overlay_region(base, source, center, w, h, alpha=0.7, mode="rect"):
 
 
 def preprocesar_gray(img_gray):
-    """Preprocesado ligero: blur + ecualización de histograma (tema filtros + histograma)."""
     blur = cv2.GaussianBlur(img_gray, (5, 5), 0)
     eq = cv2.equalizeHist(blur)
     return eq
 
 
 def detectar_landmarks_basicos(img):
-    """
-    Detecta cara y ojos con Haar.
-    La boca se coloca a una distancia fija por debajo de la línea de los ojos,
-    proporcional a la distancia entre ojos. Así foto y vídeo usan el MISMO criterio.
-    """
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     gray = preprocesar_gray(gray)
 
     faces = face_cascade.detectMultiScale(gray, 1.3, 5)
-
     if len(faces) == 0:
         return None, None
 
-    # cara más grande
     x, y, w, h = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)[0]
     roi_gray = gray[y:y + h, x:x + w]
 
-    # --- ojos ---
+    # ojos
     eyes = eye_cascade.detectMultiScale(roi_gray, 1.1, 5)
-    eyes = sorted(eyes, key=lambda e: e[1])  # ordenar por coordenada y
+    eyes = sorted(eyes, key=lambda e: e[1])
 
     eye_centers = []
     for ex, ey, ew, eh in eyes:
@@ -96,11 +86,11 @@ def detectar_landmarks_basicos(img):
         left_eye = np.array([x + 0.3 * w, y + 0.35 * h], dtype=np.float32)
         right_eye = np.array([x + 0.7 * w, y + 0.35 * h], dtype=np.float32)
 
-    # --- boca geométrica basada en ojos ---
+    # boca geométrica
     eye_center = (left_eye + right_eye) / 2.0
     eye_dist = np.linalg.norm(right_eye - left_eye)
 
-    MOUTH_OFFSET_FACTOR = 1.2  # prueba 1.2–1.4 hasta que te guste
+    MOUTH_OFFSET_FACTOR = 1.2
     mouth_center = eye_center + np.array([0.0, MOUTH_OFFSET_FACTOR * eye_dist], dtype=np.float32)
 
     pts = np.vstack([left_eye, right_eye, mouth_center]).astype(np.float32)
@@ -108,12 +98,7 @@ def detectar_landmarks_basicos(img):
     return pts, face_rect
 
 
-
 def preparar_foto(photo_path):
-    """
-    Carga la foto, detecta landmarks en ella y construye una máscara elíptica.
-    Devuelve imagen, máscara, puntos fuente y rectángulo de cara.
-    """
     img = cv2.imread(photo_path)
     if img is None:
         raise ValueError("No se pudo leer la foto")
@@ -132,12 +117,7 @@ def preparar_foto(photo_path):
 
 
 def refinar_afn_con_orb(photo_gray, frame_gray, src_face_rect, dst_face_rect, M_inicial):
-    """
-    Refinamiento opcional de la transformación afín usando ORB + matching.
-    Si algo falla, devuelve M_inicial tal cual.
-    (Esta parte es extensión: ORB + estimateAffine2D, si no lo habéis visto
-     en prácticas, podéis mencionarlo como mejora extra sugerida por ChatGPT.)
-    """
+    # Mejora opcional; si algo falla, devuelve M_inicial
     if M_inicial is None:
         return M_inicial
 
@@ -196,15 +176,16 @@ def aplicar_swap(frame, photo_img, photo_mask, src_pts, src_face_rect,
 
     M = cv2.getAffineTransform(src_pts, dst_pts.astype(np.float32))
 
-    # Si quisieras volver a probar ORB más adelante:
-    # if usar_orb:
-    #     ...
+    if usar_orb:
+        photo_gray = cv2.cvtColor(photo_img, cv2.COLOR_BGR2GRAY)
+        frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        frame_gray = preprocesar_gray(frame_gray)
+        M = refinar_afn_con_orb(photo_gray, frame_gray, src_face_rect, dst_face_rect, M)
 
     h, w = frame.shape[:2]
     warped_face = cv2.warpAffine(photo_img, M, (w, h), flags=cv2.INTER_LINEAR)
     warped_mask = cv2.warpAffine(photo_mask, M, (w, h))
 
-    # Ajustar máscara al tamaño de la cara detectada en el usuario
     x_d, y_d, w_d, h_d = dst_face_rect
     mask_dst = np.zeros_like(warped_mask)
     center_d = (x_d + w_d // 2, y_d + h_d // 2)
@@ -226,7 +207,7 @@ def aplicar_swap(frame, photo_img, photo_mask, src_pts, src_face_rect,
 
     swapped = cv2.seamlessClone(src_roi, frame, mask_roi, center_clone, cv2.NORMAL_CLONE)
 
-    # --- overlay de ojos/boca, pero más pequeño y suave ---
+    # overlay suave de ojos y boca para mantener expresiones
     left_eye = dst_pts[0]
     right_eye = dst_pts[1]
     mouth = dst_pts[2]
@@ -239,49 +220,8 @@ def aplicar_swap(frame, photo_img, photo_mask, src_pts, src_face_rect,
     mouth_w = int(eye_dist * 1.1)
     mouth_h = int(eye_dist * 0.3)
 
-    # Si las barras te siguen molestando, puedes comentar boca.
     swapped = overlay_region(swapped, frame, left_eye, eye_w, eye_h, alpha=0.9, mode="ellipse")
     swapped = overlay_region(swapped, frame, right_eye, eye_w, eye_h, alpha=0.9, mode="ellipse")
     swapped = overlay_region(swapped, frame, mouth, mouth_w, mouth_h, alpha=0.8, mode="ellipse")
 
     return swapped, dst_pts
-
-
-def main(photo_path, camera_index=0, width=1280, height=720):
-    cap = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)
-    if not cap.isOpened():
-        print("No se pudo abrir la cámara")
-        return
-
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-
-    photo_img, photo_mask, src_pts, src_face_rect = preparar_foto(photo_path)
-
-    prev_dst_pts = None
-
-    try:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
-
-            frame_swapped, prev_dst_pts = aplicar_swap(
-                frame, photo_img, photo_mask, src_pts, src_face_rect,
-                prev_dst_pts=prev_dst_pts, alpha_smooth=0.6, usar_orb=True
-            )
-
-            cv2.imshow("Face swap alineado ojos y boca", frame_swapped)
-
-            key = cv2.waitKey(1) & 0xFF
-            if key == ord('q') or key == 27:
-                break
-    finally:
-        cap.release()
-        cv2.destroyAllWindows()
-
-
-if __name__ == "__main__":
-    main(photo_path="fotos/aitana_foto.webp")
-
-    #main(photo_path="fotos/cara_mariano_rajoy.webp")

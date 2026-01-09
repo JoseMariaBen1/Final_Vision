@@ -120,66 +120,64 @@ def crear_contrasena(camera_index=0, width=1280, height=720):
     print("Coloca la figura en el recuadro y pulsa 'c' para capturar.")
     print("'e' = guardar, 'r' = reset, 'q' = salir.")
 
-    try:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        frame_show = frame.copy()
+
+        patron, (x1, y1, x2, y2), cnt = detectar_patron(frame)
+
+        cv2.rectangle(frame_show, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        if cnt is not None:
+            cv2.drawContours(frame_show, [cnt], -1, (0, 255, 0), 2)
+
+        txt1 = "CREAR CONTRASENA"
+        cv2.putText(frame_show, txt1, (30, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+
+        txt2 = "SEC: " + secuencia_a_texto(seq)
+        cv2.putText(frame_show, txt2, (30, 80),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+        txt3 = f"Min len: {MIN_LEN} | 'c'=captura, 'e'=guardar, 'r'=reset, 'q'=salir"
+        cv2.putText(frame_show, txt3, (30, 120),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+
+        txt4 = "PATRON ACTUAL: " + nombre_patron(patron)
+        cv2.putText(frame_show, txt4, (30, 155),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+
+        cv2.imshow("Seguridad - Crear contrasena", frame_show)
+        key = cv2.waitKey(1) & 0xFF
+
+        if key == ord('q') or key == 27:
+            seq = None
+            break
+
+        if key == ord('r'):
+            seq = []
+            print("Secuencia reseteada.")
+
+        if key == ord('c'):
+            if patron != PATTERN_NONE:
+                seq.append(patron)
+                print("Secuencia actual:", secuencia_a_texto(seq))
+            else:
+                print("No se ha detectado figura valida al capturar.")
+
+        if key == ord('e'):
+            if len(seq) >= MIN_LEN:
+                print("Contrasena guardada:", secuencia_a_texto(seq))
                 break
+            else:
+                print(f"La contrasena debe tener al menos {MIN_LEN} figuras.")
 
-            frame_show = frame.copy()
-
-            patron, (x1, y1, x2, y2), cnt = detectar_patron(frame)
-
-            cv2.rectangle(frame_show, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            if cnt is not None:
-                cv2.drawContours(frame_show, [cnt], -1, (0, 255, 0), 2)
-
-            txt1 = "CREAR CONTRASENA"
-            cv2.putText(frame_show, txt1, (30, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
-
-            txt2 = "SEC: " + secuencia_a_texto(seq)
-            cv2.putText(frame_show, txt2, (30, 80),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
-
-            txt3 = f"Min len: {MIN_LEN} | 'c'=captura, 'e'=guardar, 'r'=reset, 'q'=salir"
-            cv2.putText(frame_show, txt3, (30, 120),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
-
-            txt4 = "PATRON ACTUAL: " + nombre_patron(patron)
-            cv2.putText(frame_show, txt4, (30, 155),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
-
-            cv2.imshow("Seguridad - Crear contrasena", frame_show)
-            key = cv2.waitKey(1) & 0xFF
-
-            if key == ord('q') or key == 27:
-                seq = None
-                break
-
-            if key == ord('r'):
-                seq = []
-                print("Secuencia reseteada.")
-
-            if key == ord('c'):
-                if patron != PATTERN_NONE:
-                    seq.append(patron)
-                    print("Secuencia actual:", secuencia_a_texto(seq))
-                else:
-                    print("No se ha detectado figura valida al capturar.")
-
-            if key == ord('e'):
-                if len(seq) >= MIN_LEN:
-                    print("Contrasena guardada:", secuencia_a_texto(seq))
-                    break
-                else:
-                    print(f"La contrasena debe tener al menos {MIN_LEN} figuras.")
-
-    finally:
-        cap.release()
-        cv2.destroyAllWindows()
-
+    cap.release()
+    cv2.destroyAllWindows()
     return seq
+
 
 
 def comprobar_contrasena(password, camera_index=0, width=1280, height=720):
@@ -198,71 +196,66 @@ def comprobar_contrasena(password, camera_index=0, width=1280, height=720):
     print("Coloca la figura en el recuadro y pulsa 'c' para capturar cada simbolo.")
     print("'r' = cambiar contrasena, 'q' = salir.")
 
-    try:
-        while True:
-            ret, frame = cap.read()
-            if not ret:
-                break
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
 
-            frame_show = frame.copy()
+        frame_show = frame.copy()
 
-            patron, (x1, y1, x2, y2), cnt = detectar_patron(frame)
+        patron, (x1, y1, x2, y2), cnt = detectar_patron(frame)
 
-            cv2.rectangle(frame_show, (x1, y1), (x2, y2), (0, 0, 255), 2)
-            if cnt is not None:
-                cv2.drawContours(frame_show, [cnt], -1, (0, 255, 0), 2)
+        cv2.rectangle(frame_show, (x1, y1), (x2, y2), (0, 0, 255), 2)
+        if cnt is not None:
+            cv2.drawContours(frame_show, [cnt], -1, (0, 255, 0), 2)
 
-            txt1 = "INTRODUCIR CONTRASENA"
-            cv2.putText(frame_show, txt1, (30, 40),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
+        txt1 = "INTRODUCIR CONTRASENA"
+        cv2.putText(frame_show, txt1, (30, 40),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
 
-            txt3 = "ENT: " + secuencia_a_texto(input_seq)
-            cv2.putText(frame_show, txt3, (30, 115),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+        txt3 = "ENT: " + secuencia_a_texto(input_seq)
+        cv2.putText(frame_show, txt3, (30, 115),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
 
-            txt4 = "'c'=captura, 'r'=cambiar contrasena, 'q'=salir"
-            cv2.putText(frame_show, txt4, (30, 150),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        txt4 = "'c'=captura, 'r'=cambiar contrasena, 'q'=salir"
+        cv2.putText(frame_show, txt4, (30, 150),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
 
-            txt5 = "PATRON ACTUAL: " + nombre_patron(patron)
-            cv2.putText(frame_show, txt5, (30, 185),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+        txt5 = "PATRON ACTUAL: " + nombre_patron(patron)
+        cv2.putText(frame_show, txt5, (30, 185),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
 
-            cv2.imshow("Seguridad - Introducir contrasena", frame_show)
-            key = cv2.waitKey(1) & 0xFF
+        cv2.imshow("Seguridad - Introducir contrasena", frame_show)
+        key = cv2.waitKey(1) & 0xFF
 
-            if key == ord('q') or key == 27:
-                # señal de cancelación hacia fuera
-                password = None
-                break
+        if key == ord('q') or key == 27:
+            password = None
+            break
 
+        if key == ord('r'):
+            print("Cambio de contrasena solicitado.")
+            cap.release()
+            cv2.destroyAllWindows()
+            nueva = crear_contrasena(camera_index, width, height)
+            return False, nueva
 
-            if key == ord('r'):
-                print("Cambio de contrasena solicitado.")
-                cap.release()
-                cv2.destroyAllWindows()
-                nueva = crear_contrasena(camera_index, width, height)
-                return False, nueva
+        if key == ord('c'):
+            if patron == PATTERN_NONE:
+                print("No se ha detectado figura valida al capturar.")
+            else:
+                input_seq.append(patron)
+                print("Entrada actual:", secuencia_a_texto(input_seq))
 
-            if key == ord('c'):
-                if patron == PATTERN_NONE:
-                    print("No se ha detectado figura valida al capturar.")
-                else:
-                    input_seq.append(patron)
-                    print("Entrada actual:", secuencia_a_texto(input_seq))
+                if input_seq != password[:len(input_seq)]:
+                    print("Error en la secuencia. Se resetea entrada.")
+                    input_seq = []
+                elif len(input_seq) == len(password):
+                    print("CONTRASENA CORRECTA")
+                    unlocked = True
+                    break
 
-                    if input_seq != password[:len(input_seq)]:
-                        print("Error en la secuencia. Se resetea entrada.")
-                        input_seq = []
-                    elif len(input_seq) == len(password):
-                        print("CONTRASENA CORRECTA")
-                        unlocked = True
-                        break
-
-    finally:
-        cap.release()
-        cv2.destroyAllWindows()
-
+    cap.release()
+    cv2.destroyAllWindows()
     return unlocked, password
 
 
@@ -282,9 +275,7 @@ def barrera_seguridad(password=None, camera_index=0, width=1280, height=720):
 
 
 if __name__ == "__main__":
-    password = [PATTERN_CIRCLE,PATTERN_CIRCLE,PATTERN_TRIANGLE,PATTERN_SQUARE]
-    #password = None
-
+    password = [PATTERN_CIRCLE, PATTERN_CIRCLE, PATTERN_TRIANGLE, PATTERN_SQUARE]
     ok, pwd = barrera_seguridad(password)
     if ok:
         print("Acceso concedido. Aqui arrancaria el juego simple.")
