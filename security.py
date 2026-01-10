@@ -272,12 +272,3 @@ def barrera_seguridad(password=None, camera_index=0, width=1280, height=720):
         if ok:
             return True, password
         # si ok es False pero password ha cambiado (por 'r'), repetimos con la nueva
-
-
-if __name__ == "__main__":
-    password = [PATTERN_CIRCLE, PATTERN_CIRCLE, PATTERN_TRIANGLE, PATTERN_SQUARE]
-    ok, pwd = barrera_seguridad(password)
-    if ok:
-        print("Acceso concedido. Aqui arrancaria el juego simple.")
-    else:
-        print("No se ha pasado la barrera de seguridad.")

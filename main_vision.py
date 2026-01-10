@@ -23,6 +23,7 @@ def detectar_patron_lateral(roi):
     Versión específica de detección de figura para el ROI lateral.
     Usa la misma lógica de la práctica, pero prioriza:
     CIRCULO > TRIANGULO > CUADRADO.
+    Se ignoran contornos pegados al borde del ROI para evitar falsos positivos.
     """
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
@@ -32,8 +33,12 @@ def detectar_patron_lateral(roi):
     )
 
     h, w = thresh.shape
+
+    # Extraemos todo el ROI (ya viene recortado desde main)
+    roi_bin = thresh
+
     contours, _ = cv2.findContours(
-        thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+        roi_bin, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
     )
 
     if not contours:
@@ -45,16 +50,30 @@ def detectar_patron_lateral(roi):
     best_pattern = PATTERN_NONE
     best_score = -1
 
+    border_margin = 5  # margen en píxeles para considerar que toca el borde
+
     for c in contours:
         area = cv2.contourArea(c)
         if area < min_area:
             continue
 
         x, y, cw, ch = cv2.boundingRect(c)
+
+        # 1) descartar contornos pegados al borde del ROI
+        if (
+            x <= border_margin
+            or y <= border_margin
+            or x + cw >= roi_w - border_margin
+            or y + ch >= roi_h - border_margin
+        ):
+            continue
+
+        # 2) descartar contornos demasiado alargados
         ratio_minmax = min(cw, ch) / float(max(cw, ch))
         if ratio_minmax < 0.35:
             continue
 
+        # 3) comprobar que el centro está más o menos en el interior del ROI
         cx = x + cw / 2.0
         cy = y + ch / 2.0
         if not (roi_w * 0.25 < cx < roi_w * 0.75 and roi_h * 0.25 < cy < roi_h * 0.75):
@@ -77,6 +96,7 @@ def detectar_patron_lateral(roi):
             best_pattern = p
 
     return best_pattern
+
 
 
 def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
@@ -120,7 +140,7 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
     mode = MODE_FOTO if tiene_fotos else MODE_TWO
     templates_two = None
     prev_pattern = PATTERN_NONE
-    calibrar_camara("Calibration_images_Ray")  # o la carpeta que uses tú
+    calibrar_camara("Calibration_images_Ray")  
 
 
     while True:
