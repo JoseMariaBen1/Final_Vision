@@ -337,7 +337,7 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
 
 if __name__ == "__main__":
     # password: secuencia de figuras (p.ej. CUADRADO, CIRCULO, TRIANGULO, CUADRADO)
-    password = [1, 1, 1, 1]
+    password = [2, 2, 2, 2]
     ok, pwd = barrera_seguridad(password=password)
     if ok:
         app_vision()
