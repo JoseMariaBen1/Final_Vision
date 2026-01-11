@@ -1,4 +1,4 @@
-1.- Ejecutar main.py
+1.- Ejecutar main_vision.py
 2.- La contraseña es [Cuadrado, Circulo, Triángulo, Cuadrado] y se puede cambiar
 3.- Hay modo una persona y modo dos personas (con un circulo en el lateral se cambia de modo):
     1.- Modo una persona:
