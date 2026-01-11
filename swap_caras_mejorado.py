@@ -1,12 +1,11 @@
 import cv2
 import numpy as np
 
-# === Detectores Haar: algoritmo de Viola-Jones ===
+# Detectores Haar: algoritmo de Viola-Jones 
 face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
 eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_eye.xml")
 mouth_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_smile.xml")
 
-# === ORB opcional (mejora extra) ===
 orb = cv2.ORB_create(500)
 bf_matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
 
@@ -86,7 +85,7 @@ def detectar_landmarks_basicos(img):
         left_eye = np.array([x + 0.3 * w, y + 0.35 * h], dtype=np.float32)
         right_eye = np.array([x + 0.7 * w, y + 0.35 * h], dtype=np.float32)
 
-    # boca geométrica
+    # boca
     eye_center = (left_eye + right_eye) / 2.0
     eye_dist = np.linalg.norm(right_eye - left_eye)
 
@@ -117,7 +116,6 @@ def preparar_foto(photo_path):
 
 
 def refinar_afn_con_orb(photo_gray, frame_gray, src_face_rect, dst_face_rect, M_inicial):
-    # Mejora opcional; si algo falla, devuelve M_inicial
     if M_inicial is None:
         return M_inicial
 

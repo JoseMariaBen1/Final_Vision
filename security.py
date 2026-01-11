@@ -271,4 +271,3 @@ def barrera_seguridad(password=None, camera_index=0, width=1280, height=720):
             return False, None
         if ok:
             return True, password
-        # si ok es False pero password ha cambiado (por 'r'), repetimos con la nueva

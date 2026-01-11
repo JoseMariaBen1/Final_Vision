@@ -224,7 +224,7 @@ def aplicar_swap_dos_caras(frame, templates):
     out = clonar_cara(out, img_left, mask_left, src_pts_left, dst_pts_right, rect_right)
     out = clonar_cara(out, img_right, mask_right, src_pts_right, dst_pts_left, rect_left)
 
-    # refinamiento ojos/boca, mismos parámetros que modo foto
+    # refinamiento ojos/boca
     left_eye_L, right_eye_L, mouth_L = dst_pts_left
     eye_dist_L = np.linalg.norm(right_eye_L - left_eye_L)
     eye_w_L = int(eye_dist_L * 0.8)

@@ -43,18 +43,7 @@ def calibrar_camara(
     dy: float = 30.0,
     mostrar_esquinas: bool = False,
 ):
-    """
-    Ejecuta TODO el proceso de calibración usando el código del notebook.
-
-    - calib_folder: carpeta donde están las imágenes 1.jpg, 2.jpg, ..., n_images.jpg
-    - n_images: número de imágenes a usar (por defecto 11 -> 1..11)
-    - chessboard_shape: nº de esquinas internas (cols, filas)
-    - dx, dy: tamaño del cuadrado del tablero (en la misma unidad)
-    """
-
     global intrinsics, dist_coeffs
-
-    print("OpenCV deberia ser 4.8.0.76. Version actual:", cv2.__version__)
 
     imgs_path = [os.path.join(calib_folder, f"{i}.jpg") for i in range(1, n_images + 1)]
     imgs = load_images(imgs_path)

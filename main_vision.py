@@ -19,12 +19,6 @@ MODE_TWO = 1
 
 
 def detectar_patron_lateral(roi):
-    """
-    Versión específica de detección de figura para el ROI lateral.
-    Usa la misma lógica de la práctica, pero prioriza:
-    CIRCULO > TRIANGULO > CUADRADO.
-    Se ignoran contornos pegados al borde del ROI para evitar falsos positivos.
-    """
     gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
     blur = cv2.GaussianBlur(gray, (5, 5), 0)
 
@@ -183,7 +177,7 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
             print("Salida por teclado.")
             break
 
-        # ----- MODO FOTO -----
+        #MODO FOTO 
         if mode == MODE_FOTO and tiene_fotos:
             frame_swapped, prev_dst_pts = aplicar_swap(
                 frame,
@@ -285,7 +279,7 @@ def app_vision(camera_index=0, width=1280, height=720, photo_folder="fotos"):
                     mode = MODE_TWO
                     templates_two = None
 
-        # ----- MODO 2 PERSONAS -----
+        #MODO 2 PERSONAS
         elif mode == MODE_TWO:
             if templates_two is None:
                 cv2.putText(
